@@ -23,9 +23,20 @@ class BaseVisualServoing:
         # self.state[1] = 1.5
         # self.state[2] = 2
 
-        self.state[0] = -1
-        self.state[1] = 0.0
-        self.state[2] = -3.0
+        #green
+        # self.state[0] = -1
+        # self.state[1] = 0.0
+        # self.state[2] = -2.0
+
+        # #purple
+        # self.state[0] = -1
+        # self.state[1] = 0.0
+        # self.state[2] = -3.0
+
+        # #hrishi
+        self.state[0] = -0.75
+        self.state[1] = 0.75
+        self.state[2] = -2.0
 
     def set_controls(self, controls: np.ndarray):
         self.controls = controls

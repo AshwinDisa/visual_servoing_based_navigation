@@ -19,19 +19,19 @@ class VisualServoingRobot(BaseVisualServoing):
         self.canvas_mask = cv2.imread("images/mask_single_tower.png")
 
         # Initialize PD gains for X, Y, and Z axes
-        self.Kp_x = 0.002
-        self.Kd_x = 0.0
+        self.Kp_x = 0.01
+        self.Kd_x = 0.01
 
-        self.Kp_y = 0.01
-        self.Kd_y = 0.1
+        self.Kp_y = 0.005
+        self.Kd_y = 0.01
 
-        self.Kp_forward = 0.2
-        self.Kd_forward = 0.5
+        self.Kp_depth = 10
+        self.Kd_depth = 0.5
 
         # Initialize errors for derivative terms
-        self.prev_error_px = -31
-        self.prev_error_py = 78
-        self.prev_error_forward = 0
+        self.prev_error_px = 0
+        self.prev_error_py = 0
+        self.prev_error_depth = 0
 
         # Fixed time step
         self.dt = 0.01
@@ -99,72 +99,31 @@ class VisualServoingRobot(BaseVisualServoing):
         # Euler integration
         self.state += state_dot * time_step
 
-    # def get_camera_view(self):
-    #     """
-    #     Generates a synthetic camera view based on the robot's current pose and the canvas image.
-
-    #     This function crops an image from the larger canvas according to the robot's state.
-    #     The resulting cropped image is expected to simulate the camera perspective
-
-    #     Returns:
-    #     None: The camera view image and mask are updated in place.
-    #     """
-
-    #     x, y, z, _, _, _, _ = self.state
-
-    #     # The canvas is at 2.75m from the world frame, and the drone is initialized at (4, 1.5, 2)
-    #     # Hence, the distance between the drone and the canvas is 2.75 - 1.5 = 1.25 meters
-    #     # canvas_distance = 2.75 - 1.5  # corrected distance in meters
-    #     canvas_distance = 2  # corrected distance in meters
-
-    #     # Convert the robot's (x, y, z) coordinates from meters to pixels using the scaling factor
-    #     x_px = int(x * self.pixel_per_meter + self.canvas_size / 2)
-    #     z_px = int(-z * self.pixel_per_meter + self.canvas_size / 2)
-
-    #     # The robot is looking directly at the canvas, we crop a 300x300px area around the current position
-    #     half_view_size = self.camera_view_size // 2
-        
-    #     # Ensure the crop window stays within canvas bounds
-    #     top_left_x = max(0, x_px - half_view_size)
-    #     top_left_y = max(0, z_px - half_view_size)
-    #     bottom_right_x = min(self.canvas_size, top_left_x + self.camera_view_size)
-    #     bottom_right_y = min(self.canvas_size, top_left_y + self.camera_view_size)
-
-    #     # Crop the camera view from the canvas image and mask
-    #     camera_view = self.canvas_image[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
-    #     camera_mask = self.canvas_mask[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
-
-    #     return camera_view, camera_mask
-
-
     def get_camera_view(self):
         """
         Generates a synthetic camera view based on the robot's current pose and the canvas image.
+
         This function crops an image from the larger canvas according to the robot's state.
-        The resulting cropped image is expected to simulate the camera perspective, accounting for focal length.
+        The resulting cropped image is expected to simulate the camera perspective
 
         Returns:
-        tuple: (camera_view, camera_mask) where both are 300x300 pixel images.
+        None: The camera view image and mask are updated in place.
         """
 
-        # Extract the robot's position in world coordinates (X, Y, Z)
         x, y, z, _, _, _, _ = self.state
 
-        # Fixed distance between the drone and the canvas (drone is 2 meters away)
-        Z_drone = 2.0  # The depth of the drone from the canvas
+        # The canvas is at 2.75m from the world frame, and the drone is initialized at (4, 1.5, 2)
+        # Hence, the distance between the drone and the canvas is 2.75 - 1.5 = 1.25 meters
+        # canvas_distance = 2.75 - 1.5  # corrected distance in meters
+        canvas_distance = 2  # corrected distance in meters
 
-        # The focal length of the camera in pixels (provided as 900 pixels)
-        focal_length_px = 900
-
-        # Convert the robot's (x, y) coordinates to pixel coordinates on the canvas using the projection formula
-        # u = f * (X / Z), v = f * (Y / Z)
-        # We are only using X (horizontal) and Z (vertical) here for simplicity.
-        x_px = int((x / Z_drone) * focal_length_px + self.canvas_size / 2)
-        z_px = int((-z / Z_drone) * focal_length_px + self.canvas_size / 2)  # Mapping Z to the vertical axis in the canvas
+        # Convert the robot's (x, y, z) coordinates from meters to pixels using the scaling factor
+        x_px = int(x * self.pixel_per_meter + self.canvas_size / 2)
+        z_px = int(-z * self.pixel_per_meter + self.canvas_size / 2)
 
         # The robot is looking directly at the canvas, we crop a 300x300px area around the current position
         half_view_size = self.camera_view_size // 2
-
+        
         # Ensure the crop window stays within canvas bounds
         top_left_x = max(0, x_px - half_view_size)
         top_left_y = max(0, z_px - half_view_size)
@@ -172,8 +131,8 @@ class VisualServoingRobot(BaseVisualServoing):
         bottom_right_y = min(self.canvas_size, top_left_y + self.camera_view_size)
 
         # Crop the camera view from the canvas image and mask
-        camera_view = self.canvas_image[top_left_y:bottom_right_y, top_left_x:bottom_right_x].copy()
-        camera_mask = self.canvas_mask[top_left_y:bottom_right_y, top_left_x:bottom_right_x].copy()
+        camera_view = self.canvas_image[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
+        camera_mask = self.canvas_mask[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
 
         return camera_view, camera_mask
 
@@ -207,25 +166,6 @@ class VisualServoingRobot(BaseVisualServoing):
 
         camera_view_with_boxes = camera_view.copy()
 
-        # Iterate over each detected green contour
-        for contour in green_contours:
-            # Get the minimum area bounding box (rotated rectangle)
-            rect = cv2.minAreaRect(contour)
-            (px, py), (wbb, hbb), theta_bb = rect
-
-            # Calculate box points for visualization
-            box = cv2.boxPoints(rect)
-            box = np.intp(box)
-
-            # Label as green and draw green contours
-            bar_label = 'horizontal'
-            cv2.drawContours(camera_view_with_boxes, [box], 0, (0, 255, 0), 2)  # Green color for green bars
-
-            cv2.circle(camera_view_with_boxes, (int(px), int(py)), 5, (0, 0, 255), -1)
-
-            # Store the bounding box information
-            bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
-
         # Iterate over each detected purple contour
         for contour in purple_contours:
             # Get the minimum area bounding box (rotated rectangle)
@@ -239,6 +179,26 @@ class VisualServoingRobot(BaseVisualServoing):
             # Label as purple and draw purple contours
             bar_label = 'vertical'
             cv2.drawContours(camera_view_with_boxes, [box], 0, (128, 0, 128), 2)  # Purple color for purple bars
+
+            cv2.circle(camera_view_with_boxes, (int(px), int(py)), 5, (0, 0, 255), -1)
+
+            # Store the bounding box information
+            bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
+
+        
+        # Iterate over each detected green contour
+        for contour in green_contours:
+            # Get the minimum area bounding box (rotated rectangle)
+            rect = cv2.minAreaRect(contour)
+            (px, py), (wbb, hbb), theta_bb = rect
+
+            # Calculate box points for visualization
+            box = cv2.boxPoints(rect)
+            box = np.intp(box)
+
+            # Label as green and draw green contours
+            bar_label = 'horizontal'
+            cv2.drawContours(camera_view_with_boxes, [box], 0, (0, 255, 0), 2)  # Green color for green bars
 
             cv2.circle(camera_view_with_boxes, (int(px), int(py)), 5, (0, 0, 255), -1)
 
@@ -304,7 +264,6 @@ class VisualServoingRobot(BaseVisualServoing):
         np.ndarray: A numpy array containing the control inputs:
                     [thrust, roll_rate, desired_acceleration_y].
         """
-
         bounding_boxes = self.get_bounding_box()
 
         if not bounding_boxes:
@@ -317,19 +276,19 @@ class VisualServoingRobot(BaseVisualServoing):
         desired_px = self.camera_view_size / 2
         desired_py = self.camera_view_size / 2
 
-        # Compute errors in X, Y, and Z (forward) axes pixel space
-        error_px = desired_px - px - 30
+        # Compute errors in X, Y, and Z (depth) axes
+        error_px = desired_px - px
         error_py = desired_py - py
-        error_forward = 0.0  # Current forward (Z-axis)
+        error_depth = 0.0
 
         # Compute derivative terms (rate of change of error)
         derivative_px = (error_px - self.prev_error_px) / self.dt
         derivative_py = (error_py - self.prev_error_py) / self.dt
-        derivative_forward = (error_forward - self.prev_error_forward) / self.dt
+        derivative_depth = (error_depth - self.prev_error_depth) / self.dt
 
         # PD control for each axis
-        thrust = (self.Kp_y * error_py +
-                    self.Kd_y * error_py) + 9.81 # Thrust control (Z-axis)
+        thrust = - (self.Kp_depth * error_depth +
+                    self.Kd_depth * derivative_depth)  # Thrust control (Z-axis)
 
         roll_rate = - (self.Kp_x * error_px +
                        self.Kd_x * derivative_px)  # Roll control (X-axis)
@@ -340,12 +299,12 @@ class VisualServoingRobot(BaseVisualServoing):
         # Save current errors for the next iteration
         self.prev_error_px = error_px
         self.prev_error_py = error_py
-        self.prev_error_forward = error_forward
+        self.prev_error_depth = error_depth
 
-        print(f"Errors: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_forward:.2f}]")
-        print(f"Control inputs: [thrust: {thrust:.2f}, roll_rate: {roll_rate:.2f}, y_ddot: {y_ddot:.2f}]")
+        # print(f"Errors: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_depth:.2f}]")
+        print(f"Controls: [Thrust: {thrust:.2f}, Roll Rate: {roll_rate:.2f}, Y Acceleration: {y_ddot:.2f}]")
 
-        return np.array([thrust, roll_rate, 0])
+        return np.array([9.81, roll_rate, y_ddot])
 
 
 if __name__ == "__main__":
