@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import pdb
 
 from base_visual_servoing import BaseVisualServoing
 
@@ -99,9 +100,9 @@ class VisualServoingRobot(BaseVisualServoing):
         canvas_distance = 2  # corrected distance in meters
 
         # Convert the robot's (x, y, z) coordinates from meters to pixels using the scaling factor
-        x_px = int((x / canvas_distance) * self.pixels_per_meter + self.canvas_size / 2)
-        z_px = int((z / canvas_distance) * self.pixels_per_meter + self.canvas_size / 2)
-        
+        x_px = int(x * self.pixel_per_meter + self.canvas_size / 2)
+        z_px = int(-z * self.pixel_per_meter + self.canvas_size / 2)
+
         # The robot is looking directly at the canvas, we crop a 300x300px area around the current position
         half_view_size = self.camera_view_size // 2
         
@@ -114,6 +115,8 @@ class VisualServoingRobot(BaseVisualServoing):
         # Crop the camera view from the canvas image and mask
         camera_view = self.canvas_image[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
         camera_mask = self.canvas_mask[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
+
+        return camera_view, camera_mask
 
     def get_bounding_box(self):
         """
@@ -131,7 +134,7 @@ class VisualServoingRobot(BaseVisualServoing):
         upper_purple = np.array([255, 255, 255])
 
         # Get the camera view and mask view (this is a placeholder, replace with actual function)
-        camera_view, mask_view = self.get_camera_view(self.state)  # Ensure get_camera_view() is implemented
+        camera_view, mask_view = self.get_camera_view()  # Ensure get_camera_view() is implemented
 
         # Apply color thresholding to get binary masks
         mask_green = cv2.inRange(mask_view, lower_green, upper_green)
@@ -146,8 +149,10 @@ class VisualServoingRobot(BaseVisualServoing):
 
         bounding_boxes = []
 
-        # Iterate over each detected contour
-        for contour in all_contours:
+        camera_view_with_boxes = camera_view.copy()
+
+        # Iterate over each detected green contour
+        for contour in green_contours:
             # Get the minimum area bounding box (rotated rectangle)
             rect = cv2.minAreaRect(contour)
             (px, py), (wbb, hbb), theta_bb = rect
@@ -156,26 +161,76 @@ class VisualServoingRobot(BaseVisualServoing):
             box = cv2.boxPoints(rect)
             box = np.intp(box)
 
-            # Classify the bar as vertical or horizontal based on aspect ratio
-            if wbb < hbb:
-                bar_label = 'horizontal'
-                cv2.drawContours(camera_view, [box], 0, (0, 255, 0), 2)
-            else:
-                bar_label = 'vertical'
-                cv2.drawContours(camera_view, [box], 0, (128, 0, 128), 2)
+            # Label as green and draw green contours
+            bar_label = 'horizontal'
+            cv2.drawContours(camera_view_with_boxes, [box], 0, (0, 255, 0), 2)  # Green color for green bars
 
             # Store the bounding box information
             bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
 
+        # Iterate over each detected purple contour
+        for contour in purple_contours:
+            # Get the minimum area bounding box (rotated rectangle)
+            rect = cv2.minAreaRect(contour)
+            (px, py), (wbb, hbb), theta_bb = rect
+
+            # Calculate box points for visualization
+            box = cv2.boxPoints(rect)
+            box = np.intp(box)
+
+            # Label as purple and draw purple contours
+            bar_label = 'vertical'
+            cv2.drawContours(camera_view_with_boxes, [box], 0, (128, 0, 128), 2)  # Purple color for purple bars
+
+            # Store the bounding box information
+            bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
+
+        cv2.imshow('RGB view', camera_view_with_boxes)
+        cv2.imshow('Mask view', mask_view)
+        cv2.waitKey(100)  # Wait for a key press to close the window
+
+        # print(bounding_boxes)
+
+        return bounding_boxes
+
     def get_visual_servoing_inputs(self):
         """
-        Implements the visual servoing algorithm for navigation and control of the robot.
+        Implements the visual servoing algorithm to generate control inputs for the robot's navigation.
 
         Returns:
         np.ndarray: A numpy array containing the control inputs:
                     [thrust, roll_rate, desired_acceleration_y].
         """
+        bounding_boxes = self.get_bounding_box()
 
+        if not bounding_boxes:
+            return np.array([0, 0, 0])  # Return zero inputs if no bounding box is detected
+
+        # Extract bounding box properties
+        px, py, wbb, hbb, theta_bb, bar_label = bounding_boxes[0]
+
+        # Desired bounding box center position (center of camera view)
+        desired_px = self.camera_view_size / 2
+        desired_py = self.camera_view_size / 2
+
+        # Compute errors in X, Y, and Z (depth) axes
+        error_px = desired_px - px
+        error_py = desired_py - py
+        error_depth = self.state[2]  # Current depth (Z-axis)
+
+        print(f"Bounding box error: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_depth:.2f}]")
+
+        # Define proportional control gains
+        Kp_x = 0.005  # Gain for X-axis (roll)
+        Kp_y = 0.005  # Gain for Y-axis (vertical)
+        Kp_depth = 100  # Gain for Z-axis (depth)
+
+        # Compute control inputs
+        thrust = - Kp_depth * error_depth  # Thrust control (Z-axis)
+        roll_rate = - Kp_x * error_px  # Roll control (X-axis)
+        y_ddot = - Kp_y * error_py  # Vertical acceleration (Y-axis)
+
+        return np.array([thrust, roll_rate, y_ddot])
 
 if __name__ == "__main__":
     robot = VisualServoingRobot()

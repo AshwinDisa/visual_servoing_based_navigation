@@ -12,6 +12,12 @@ def get_bounding_box():
     lower_purple = np.array([120, 20, 120])
     upper_purple = np.array([255, 255, 255])
 
+    # lower_green = np.array([45, 122, 64])
+    # upper_green = np.array([45, 231, 255])
+
+    # lower_purple = np.array([135, 53, 64])
+    # upper_purple = np.array([135, 231, 255])
+
     # Get the camera view and mask view (this is a placeholder, replace with actual function)
     camera_view, mask_view = get_camera_view(state)  # Ensure get_camera_view() is implemented
 
