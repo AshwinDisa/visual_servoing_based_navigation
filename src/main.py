@@ -18,6 +18,24 @@ class VisualServoingRobot(BaseVisualServoing):
         self.canvas_image = cv2.imread("images/canvas_single_tower.png")
         self.canvas_mask = cv2.imread("images/mask_single_tower.png")
 
+        # Initialize PD gains for X, Y, and Z axes
+        self.Kp_x = 0.01
+        self.Kd_x = 0.01
+
+        self.Kp_y = 0.005
+        self.Kd_y = 0.01
+
+        self.Kp_depth = 10
+        self.Kd_depth = 0.5
+
+        # Initialize errors for derivative terms
+        self.prev_error_px = 0
+        self.prev_error_py = 0
+        self.prev_error_depth = 0
+
+        # Fixed time step
+        self.dt = 0.01
+
     def vehicle_dynamics(self, state: np.ndarray, control: np.ndarray) -> np.ndarray:
         """
         Computes the dynamics of a 4DOF robotic vehicle based on its current state and control inputs.
@@ -144,29 +162,26 @@ class VisualServoingRobot(BaseVisualServoing):
         green_contours, _ = cv2.findContours(mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         purple_contours, _ = cv2.findContours(mask_purple, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # Combine both sets of contours for green and purple
-        all_contours = green_contours + purple_contours
-
         bounding_boxes = []
 
         camera_view_with_boxes = camera_view.copy()
 
-        # Iterate over each detected green contour
-        for contour in green_contours:
-            # Get the minimum area bounding box (rotated rectangle)
-            rect = cv2.minAreaRect(contour)
-            (px, py), (wbb, hbb), theta_bb = rect
+        # # Iterate over each detected green contour
+        # for contour in green_contours:
+        #     # Get the minimum area bounding box (rotated rectangle)
+        #     rect = cv2.minAreaRect(contour)
+        #     (px, py), (wbb, hbb), theta_bb = rect
 
-            # Calculate box points for visualization
-            box = cv2.boxPoints(rect)
-            box = np.intp(box)
+        #     # Calculate box points for visualization
+        #     box = cv2.boxPoints(rect)
+        #     box = np.intp(box)
 
-            # Label as green and draw green contours
-            bar_label = 'horizontal'
-            cv2.drawContours(camera_view_with_boxes, [box], 0, (0, 255, 0), 2)  # Green color for green bars
+        #     # Label as green and draw green contours
+        #     bar_label = 'horizontal'
+        #     cv2.drawContours(camera_view_with_boxes, [box], 0, (0, 255, 0), 2)  # Green color for green bars
 
-            # Store the bounding box information
-            bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
+        #     # Store the bounding box information
+        #     bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
 
         # Iterate over each detected purple contour
         for contour in purple_contours:
@@ -193,9 +208,51 @@ class VisualServoingRobot(BaseVisualServoing):
 
         return bounding_boxes
 
+    # def get_visual_servoing_inputs(self):
+    #     """
+    #     Implements the visual servoing algorithm to generate control inputs for the robot's navigation.
+
+    #     Returns:
+    #     np.ndarray: A numpy array containing the control inputs:
+    #                 [thrust, roll_rate, desired_acceleration_y].
+    #     """
+    #     bounding_boxes = self.get_bounding_box()
+
+    #     if not bounding_boxes:
+    #         return np.array([0, 0, 0])  # Return zero inputs if no bounding box is detected
+
+    #     # Extract bounding box properties
+    #     px, py, wbb, hbb, theta_bb, bar_label = bounding_boxes[0]
+
+    #     # Desired bounding box center position (center of camera view)
+    #     desired_px = self.camera_view_size / 2
+    #     desired_py = self.camera_view_size / 2
+
+    #     # Compute errors in X, Y, and Z (depth) axes
+    #     error_px = desired_px - px
+    #     error_py = desired_py - py
+    #     error_depth = self.state[2]  # Current depth (Z-axis)
+
+    #     # print(f"Bounding box error: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_depth:.2f}]")
+
+    #     print(px, py)
+
+    #     # Define proportional control gains
+    #     Kp_x = 0.05 # Gain for X-axis (roll)
+    #     Kp_y = 0.005  # Gain for Y-axis (vertical)
+    #     Kp_depth = 3  # Gain for Z-axis (depth)
+
+    #     # Compute control inputs
+    #     thrust = - Kp_depth * error_depth  # Thrust control (Z-axis)
+    #     roll_rate = - Kp_x * error_px  # Roll control (X-axis)
+    #     y_ddot = - Kp_y * error_py  # Vertical acceleration (Y-axis)
+
+    #     return np.array([thrust, roll_rate, y_ddot])
+
     def get_visual_servoing_inputs(self):
         """
-        Implements the visual servoing algorithm to generate control inputs for the robot's navigation.
+        Implements the visual servoing algorithm using a PD controller
+        to generate control inputs for the robot's navigation.
 
         Returns:
         np.ndarray: A numpy array containing the control inputs:
@@ -218,19 +275,28 @@ class VisualServoingRobot(BaseVisualServoing):
         error_py = desired_py - py
         error_depth = self.state[2]  # Current depth (Z-axis)
 
-        print(f"Bounding box error: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_depth:.2f}]")
+        # Compute derivative terms (rate of change of error)
+        derivative_px = (error_px - self.prev_error_px) / self.dt
+        derivative_py = (error_py - self.prev_error_py) / self.dt
+        derivative_depth = (error_depth - self.prev_error_depth) / self.dt
 
-        # Define proportional control gains
-        Kp_x = 0.005  # Gain for X-axis (roll)
-        Kp_y = 0.005  # Gain for Y-axis (vertical)
-        Kp_depth = 100  # Gain for Z-axis (depth)
+        # PD control for each axis
+        thrust = - (self.Kp_depth * error_depth +
+                    self.Kd_depth * derivative_depth)  # Thrust control (Z-axis)
 
-        # Compute control inputs
-        thrust = - Kp_depth * error_depth  # Thrust control (Z-axis)
-        roll_rate = - Kp_x * error_px  # Roll control (X-axis)
-        y_ddot = - Kp_y * error_py  # Vertical acceleration (Y-axis)
+        roll_rate = - (self.Kp_x * error_px +
+                       self.Kd_x * derivative_px)  # Roll control (X-axis)
+
+        y_ddot = - (self.Kp_y * error_py +
+                    self.Kd_y * derivative_py)  # Vertical acceleration (Y-axis)
+
+        # Save current errors for the next iteration
+        self.prev_error_px = error_px
+        self.prev_error_py = error_py
+        self.prev_error_depth = error_depth
 
         return np.array([thrust, roll_rate, y_ddot])
+
 
 if __name__ == "__main__":
     robot = VisualServoingRobot()
