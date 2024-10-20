@@ -318,7 +318,7 @@ class VisualServoingRobot(BaseVisualServoing):
         desired_py = self.camera_view_size / 2
 
         # Compute errors in X, Y, and Z (forward) axes pixel space
-        error_px = desired_px - px - 30
+        error_px = desired_px - px
         error_py = desired_py - py
         error_forward = 0.0  # Current forward (Z-axis)
 
@@ -332,7 +332,7 @@ class VisualServoingRobot(BaseVisualServoing):
                     self.Kd_y * error_py) + 9.81 # Thrust control (Z-axis)
 
         roll_rate = - (self.Kp_x * error_px +
-                       self.Kd_x * derivative_px)  # Roll control (X-axis)
+                       self.Kd_x * derivative_px) - 0.07  # Roll control (X-axis)
 
         y_ddot = - (self.Kp_y * error_py +
                     self.Kd_y * derivative_py)  # Vertical acceleration (Y-axis)
