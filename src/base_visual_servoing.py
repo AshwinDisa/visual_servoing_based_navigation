@@ -34,9 +34,13 @@ class BaseVisualServoing:
         # self.state[2] = -3.0
 
         # #hrishi
-        self.state[0] = -0.75
+        # self.state[0] = -0.75
+        # self.state[1] = 0.75
+        # self.state[2] = -2.0
+
+        self.state[0] = -0.5
         self.state[1] = 0.75
-        self.state[2] = -2.0
+        self.state[2] = -1.75
 
     def set_controls(self, controls: np.ndarray):
         self.controls = controls

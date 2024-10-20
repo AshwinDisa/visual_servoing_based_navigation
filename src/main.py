@@ -15,15 +15,13 @@ class VisualServoingRobot(BaseVisualServoing):
         self.canvas_size = 3072
         self.camera_view_size = 300
         self.focal_length = 3.2
-        self.canvas_image = cv2.imread("images/canvas_single_tower.png")
-        self.canvas_mask = cv2.imread("images/mask_single_tower.png")
 
         # Initialize PD gains for X, Y, and Z axes
-        self.Kp_x = 0.01
-        self.Kd_x = 0.0
+        self.Kp_x = 0.001
+        self.Kd_x = 0.005
 
         self.Kp_y = 0.01
-        self.Kd_y = 0.1
+        self.Kd_y = 0.01
 
         self.Kp_forward = 0.2
         self.Kd_forward = 0.5
@@ -36,8 +34,9 @@ class VisualServoingRobot(BaseVisualServoing):
         # Fixed time step
         self.dt = 0.01
 
-        self.execute = 'climb purple'
-        self.prev_count_bounding_boxes = 0
+        self.traj_start = False
+        self.execute = 'climb_purple'
+        self.prev_count_bounding_boxes = -1
         self.green_bar_passed = 0
         self.purple_bar_passed = 0
 
@@ -79,6 +78,8 @@ class VisualServoingRobot(BaseVisualServoing):
             y_ddot,
             z_ddot
         ])
+
+        # print(x, y, z)
 
         return state_dot
 
@@ -326,17 +327,25 @@ class VisualServoingRobot(BaseVisualServoing):
 
             px, py, wbb, hbb, theta_bb, bar_label = bounding_box
 
-            if self.execute == 'climb purple' and bar_label == 'vertical':
+            if self.traj_start == False:
 
-                error_px = desired_px - px
-                error_py = desired_py - py + 100
+                self.traj_start = True
+                self.execute = 'climb_purple'
+                print("----------------------")
+                print("Climbing Purple bar")
+                print("----------------------")
+
+            if self.execute == 'climb_purple' and bar_label == 'vertical':
+
+                error_px = desired_px - px - 100
+                error_py = desired_py - py + 300
                 error_forward = 0.0
 
                 count_bounding_boxes = len(bounding_boxes)
 
-                if count_bounding_boxes - self.prev_count_bounding_boxes == -1:
+                if count_bounding_boxes - self.prev_count_bounding_boxes == 1:
 
-                    print("passed green bar")
+                    print(f"Detected {self.green_bar_passed+1}th green bar")
                     self.green_bar_passed += 1
 
                 self.prev_count_bounding_boxes = count_bounding_boxes
@@ -345,30 +354,36 @@ class VisualServoingRobot(BaseVisualServoing):
                         
                     self.execute = 'travel_green'
                     self.prev_count_bounding_boxes = 0
+                    print("----------------------")
+                    print("Onto Green bar")
+                    print("----------------------")
 
             elif self.execute == 'travel_green' and bar_label == 'horizontal':
 
-                error_px = desired_px - px - 20
-                error_py = desired_py - py
+                error_px = desired_px - px - 100
+                error_py = desired_py - py + 30
                 error_forward = 0.0
 
                 count_bounding_boxes = len(bounding_boxes)
 
                 if count_bounding_boxes - self.prev_count_bounding_boxes == -1 or count_bounding_boxes - self.prev_count_bounding_boxes == 1:
                     
-                    print("passed purple bar")
+                    print(f"Detected {self.purple_bar_passed+1}th purple bar")
                     self.purple_bar_passed += 1 
 
                 if self.purple_bar_passed > 1:
 
                     self.execute = 'descend_purple'
+                    print("----------------------")
+                    print("Descending Purple bar")
+                    print("----------------------")
 
                 self.prev_count_bounding_boxes = count_bounding_boxes
 
             elif self.execute == 'descend_purple' and bar_label == 'vertical':
 
-                error_px = desired_px - px
-                error_py = desired_py - py - 100
+                error_px = desired_px - px + 100
+                error_py = desired_py - py - 300
                 error_forward = 0.0
     
 
@@ -395,7 +410,9 @@ class VisualServoingRobot(BaseVisualServoing):
         # print(f"Errors: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_forward:.2f}]")
         # print(f"Control inputs: [thrust: {thrust:.2f}, roll_rate: {roll_rate:.2f}, y_ddot: {y_ddot:.2f}]")
 
-        return np.array([thrust, roll_rate, y_ddot])
+        # print(f"{roll_rate:.2f}, error: {error_px:.2f}")
+
+        return np.array([thrust, roll_rate, 0])
 
 
 if __name__ == "__main__":
