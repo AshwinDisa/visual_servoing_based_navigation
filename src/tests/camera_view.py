@@ -17,16 +17,25 @@ def get_camera_view(state):
     # cv2.imshow('Canvas Mask', canvas_mask)
     # cv2.waitKey(0)  # Wait for a key press for visualization
 
+
+    # Extract the robot's position in world coordinates (X, Y, Z)
     x, y, z, _, _, _, _ = state
 
-    # The canvas is at 2.75m from the world frame, and the drone is initialized at (4, 1.5, 2)
-    # Hence, the distance between the drone and the canvas is 2.75 - 1.5 = 1.25 meters
-    canvas_distance = 2.75  # corrected distance in meters
-    # canvas_distance = 2  # corrected distance in meters
+    # Fixed distance between the drone and the canvas (drone is 2 meters away)
+    # Z_drone = 2.0  # The depth of the drone from the canvas
 
-    # Convert the robot's (x, y, z) coordinates from meters to pixels using the scaling factor
-    x_px = int(x * pixel_per_meter + canvas_size / 2)
-    z_px = int(-z * pixel_per_meter + canvas_size / 2)
+    Z_drone = y
+
+    # The focal length of the camera in pixels (provided as 900 pixels)
+    focal_length_px = 900
+
+    # Convert the robot's (x, y) coordinates to pixel coordinates on the canvas using the projection formula
+    # u = f * (X / Z), v = f * (Y / Z)
+    # We are only using X (horizontal) and Z (vertical) here for simplicity.
+    x_px = int((x / Z_drone) * focal_length_px + canvas_size / 2)
+
+    # z is negative, assuming it moves the drone up in the image 
+    z_px = int((-z / Z_drone) * focal_length_px + canvas_size / 2)
     
     # The robot is looking directly at the canvas, we crop a 300x300px area around the current position
     half_view_size = camera_view_size // 2
@@ -52,6 +61,6 @@ if __name__ == "__main__":
 
     # state = np.array([0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     # state = np.array([4.0, 1.5, 2.0, 0.0, 0.0, 0.0, 0.0])
-    state = np.array([-1, 0.0, -3, 0.0, 0.0, 0.0, 0.0])
+    state = np.array([-1, 3.0, -3, 0.0, 0.0, 0.0, 0.0])
     # state = np.array([4, 1.5, 2.0, 0.0, 0.0, 0.0, 0.0])
     camera_view, camera_mask = get_camera_view(state)

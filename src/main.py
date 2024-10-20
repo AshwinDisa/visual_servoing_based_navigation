@@ -20,7 +20,7 @@ class VisualServoingRobot(BaseVisualServoing):
         self.Kp_x = 0.001
         self.Kd_x = 0.005
 
-        self.Kp_y = 0.01
+        self.Kp_y = 0.02
         self.Kd_y = 0.01
 
         self.Kp_forward = 0.2
@@ -157,7 +157,9 @@ class VisualServoingRobot(BaseVisualServoing):
         x, y, z, _, _, _, _ = self.state
 
         # Fixed distance between the drone and the canvas (drone is 2 meters away)
-        Z_drone = 2.0  # The depth of the drone from the canvas
+        # Z_drone = 2.0  # The depth of the drone from the canvas
+
+        Z_drone = 3
 
         # The focal length of the camera in pixels (provided as 900 pixels)
         focal_length_px = 900
@@ -166,7 +168,9 @@ class VisualServoingRobot(BaseVisualServoing):
         # u = f * (X / Z), v = f * (Y / Z)
         # We are only using X (horizontal) and Z (vertical) here for simplicity.
         x_px = int((x / Z_drone) * focal_length_px + self.canvas_size / 2)
-        z_px = int((-z / Z_drone) * focal_length_px + self.canvas_size / 2)  # Mapping Z to the vertical axis in the canvas
+
+        # z is negative, assuming it moves the drone up in the image 
+        z_px = int((-z / Z_drone) * focal_length_px + self.canvas_size / 2)
 
         # The robot is looking directly at the canvas, we crop a 300x300px area around the current position
         half_view_size = self.camera_view_size // 2
@@ -260,47 +264,6 @@ class VisualServoingRobot(BaseVisualServoing):
 
         return bounding_boxes
 
-    # def get_visual_servoing_inputs(self):
-    #     """
-    #     Implements the visual servoing algorithm to generate control inputs for the robot's navigation.
-
-    #     Returns:
-    #     np.ndarray: A numpy array containing the control inputs:
-    #                 [thrust, roll_rate, desired_acceleration_y].
-    #     """
-    #     bounding_boxes = self.get_bounding_box()
-
-    #     if not bounding_boxes:
-    #         return np.array([0, 0, 0])  # Return zero inputs if no bounding box is detected
-
-    #     # Extract bounding box properties
-    #     px, py, wbb, hbb, theta_bb, bar_label = bounding_boxes[0]
-
-    #     # Desired bounding box center position (center of camera view)
-    #     desired_px = self.camera_view_size / 2
-    #     desired_py = self.camera_view_size / 2
-
-    #     # Compute errors in X, Y, and Z (depth) axes
-    #     error_px = desired_px - px
-    #     error_py = desired_py - py
-    #     error_depth = self.state[2]  # Current depth (Z-axis)
-
-    #     # print(f"Bounding box error: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_depth:.2f}]")
-
-    #     print(px, py)
-
-    #     # Define proportional control gains
-    #     Kp_x = 0.05 # Gain for X-axis (roll)
-    #     Kp_y = 0.005  # Gain for Y-axis (vertical)
-    #     Kp_depth = 3  # Gain for Z-axis (depth)
-
-    #     # Compute control inputs
-    #     thrust = - Kp_depth * error_depth  # Thrust control (Z-axis)
-    #     roll_rate = - Kp_x * error_px  # Roll control (X-axis)
-    #     y_ddot = - Kp_y * error_py  # Vertical acceleration (Y-axis)
-
-    #     return np.array([thrust, roll_rate, y_ddot])
-
     def get_visual_servoing_inputs(self):
         """
         Implements the visual servoing algorithm using a PD controller
@@ -354,6 +317,7 @@ class VisualServoingRobot(BaseVisualServoing):
                         
                     self.execute = 'travel_green'
                     self.prev_count_bounding_boxes = 0
+                    self.green_bar_passed = 0
                     print("----------------------")
                     print("Onto Green bar")
                     print("----------------------")
@@ -361,7 +325,7 @@ class VisualServoingRobot(BaseVisualServoing):
             elif self.execute == 'travel_green' and bar_label == 'horizontal':
 
                 error_px = desired_px - px - 100
-                error_py = desired_py - py + 30
+                error_py = desired_py - py + 100
                 error_forward = 0.0
 
                 count_bounding_boxes = len(bounding_boxes)
@@ -378,19 +342,42 @@ class VisualServoingRobot(BaseVisualServoing):
                     print("Descending Purple bar")
                     print("----------------------")
 
+                    self.prev_count_bounding_boxes = 0    
+
                 self.prev_count_bounding_boxes = count_bounding_boxes
 
             elif self.execute == 'descend_purple' and bar_label == 'vertical':
 
                 error_px = desired_px - px + 100
-                error_py = desired_py - py - 300
+                error_py = desired_py - py - 400
                 error_forward = 0.0
-    
+
+                count_bounding_boxes = len(bounding_boxes)
+
+                if count_bounding_boxes - self.prev_count_bounding_boxes == -1:
+
+                    print(f"Detected {self.green_bar_passed+1}th green bar")
+                    self.green_bar_passed += 1
+
+                if self.green_bar_passed > 2:
+
+                    self.execute = 'Trajectory completed'
+                    self.prev_count_bounding_boxes = 0
+                    self.green_bar_passed = 0
+                    print("----------------------")
+                    print("Trajectory completed")
+                    print("----------------------")
+
+                self.prev_count_bounding_boxes = count_bounding_boxes
+
+            elif self.execute == 'Trajectory completed':
+
+                return np.array([9.81, 0, 0])
 
         # Compute derivative terms (rate of change of error)
         derivative_px = (error_px - self.prev_error_px) / self.dt
         derivative_py = (error_py - self.prev_error_py) / self.dt
-        derivative_forward = (error_forward - self.prev_error_forward) / self.dt
+        derivative_error_forward = (error_forward - self.prev_error_forward) / self.dt
 
         # PD control for each axis
         thrust = (self.Kp_y * error_py +
@@ -399,8 +386,8 @@ class VisualServoingRobot(BaseVisualServoing):
         roll_rate = - (self.Kp_x * error_px +
                        self.Kd_x * derivative_px) # Roll control (X-axis)
 
-        y_ddot = - (self.Kp_y * error_py +
-                    self.Kd_y * derivative_py)  # Vertical acceleration (Y-axis)
+        y_ddot = - (self.Kp_y * error_forward +
+                    self.Kd_y * derivative_error_forward)  # Vertical acceleration (Y-axis)
 
         # Save current errors for the next iteration
         self.prev_error_px = error_px
@@ -412,7 +399,7 @@ class VisualServoingRobot(BaseVisualServoing):
 
         # print(f"{roll_rate:.2f}, error: {error_px:.2f}")
 
-        return np.array([thrust, roll_rate, 0])
+        return np.array([thrust, roll_rate, y_ddot])
 
 
 if __name__ == "__main__":
