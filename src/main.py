@@ -19,7 +19,7 @@ class VisualServoingRobot(BaseVisualServoing):
         self.canvas_mask = cv2.imread("images/mask_single_tower.png")
 
         # Initialize PD gains for X, Y, and Z axes
-        self.Kp_x = 0.002
+        self.Kp_x = 0.01
         self.Kd_x = 0.0
 
         self.Kp_y = 0.01
@@ -35,6 +35,11 @@ class VisualServoingRobot(BaseVisualServoing):
 
         # Fixed time step
         self.dt = 0.01
+
+        self.execute = 'climb purple'
+        self.prev_count_bounding_boxes = 0
+        self.green_bar_passed = 0
+        self.purple_bar_passed = 0
 
     def vehicle_dynamics(self, state: np.ndarray, control: np.ndarray) -> np.ndarray:
         """
@@ -207,25 +212,6 @@ class VisualServoingRobot(BaseVisualServoing):
 
         camera_view_with_boxes = camera_view.copy()
 
-        # Iterate over each detected green contour
-        for contour in green_contours:
-            # Get the minimum area bounding box (rotated rectangle)
-            rect = cv2.minAreaRect(contour)
-            (px, py), (wbb, hbb), theta_bb = rect
-
-            # Calculate box points for visualization
-            box = cv2.boxPoints(rect)
-            box = np.intp(box)
-
-            # Label as green and draw green contours
-            bar_label = 'horizontal'
-            cv2.drawContours(camera_view_with_boxes, [box], 0, (0, 255, 0), 2)  # Green color for green bars
-
-            cv2.circle(camera_view_with_boxes, (int(px), int(py)), 5, (0, 0, 255), -1)
-
-            # Store the bounding box information
-            bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
-
         # Iterate over each detected purple contour
         for contour in purple_contours:
             # Get the minimum area bounding box (rotated rectangle)
@@ -239,6 +225,25 @@ class VisualServoingRobot(BaseVisualServoing):
             # Label as purple and draw purple contours
             bar_label = 'vertical'
             cv2.drawContours(camera_view_with_boxes, [box], 0, (128, 0, 128), 2)  # Purple color for purple bars
+
+            cv2.circle(camera_view_with_boxes, (int(px), int(py)), 5, (0, 0, 255), -1)
+
+            # Store the bounding box information
+            bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
+
+        # Iterate over each detected green contour
+        for contour in green_contours:
+            # Get the minimum area bounding box (rotated rectangle)
+            rect = cv2.minAreaRect(contour)
+            (px, py), (wbb, hbb), theta_bb = rect
+
+            # Calculate box points for visualization
+            box = cv2.boxPoints(rect)
+            box = np.intp(box)
+
+            # Label as green and draw green contours
+            bar_label = 'horizontal'
+            cv2.drawContours(camera_view_with_boxes, [box], 0, (0, 255, 0), 2)  # Green color for green bars
 
             cv2.circle(camera_view_with_boxes, (int(px), int(py)), 5, (0, 0, 255), -1)
 
@@ -309,18 +314,63 @@ class VisualServoingRobot(BaseVisualServoing):
 
         if not bounding_boxes:
             return np.array([0, 0, 0])  # Return zero inputs if no bounding box is detected
-
-        # Extract bounding box properties
-        px, py, wbb, hbb, theta_bb, bar_label = bounding_boxes[0]
-
+        
         # Desired bounding box center position (center of camera view)
         desired_px = self.camera_view_size / 2
         desired_py = self.camera_view_size / 2
 
-        # Compute errors in X, Y, and Z (forward) axes pixel space
-        error_px = desired_px - px
-        error_py = desired_py - py
-        error_forward = 0.0  # Current forward (Z-axis)
+        # Extract bounding box properties
+        # px, py, wbb, hbb, theta_bb, bar_label = bounding_boxes[0]
+
+        for bounding_box in bounding_boxes:
+
+            px, py, wbb, hbb, theta_bb, bar_label = bounding_box
+
+            if self.execute == 'climb purple' and bar_label == 'vertical':
+
+                error_px = desired_px - px
+                error_py = desired_py - py + 100
+                error_forward = 0.0
+
+                count_bounding_boxes = len(bounding_boxes)
+
+                if count_bounding_boxes - self.prev_count_bounding_boxes == -1:
+
+                    print("passed green bar")
+                    self.green_bar_passed += 1
+
+                self.prev_count_bounding_boxes = count_bounding_boxes
+
+                if self.green_bar_passed > 2:
+                        
+                    self.execute = 'travel_green'
+                    self.prev_count_bounding_boxes = 0
+
+            elif self.execute == 'travel_green' and bar_label == 'horizontal':
+
+                error_px = desired_px - px - 20
+                error_py = desired_py - py
+                error_forward = 0.0
+
+                count_bounding_boxes = len(bounding_boxes)
+
+                if count_bounding_boxes - self.prev_count_bounding_boxes == -1 or count_bounding_boxes - self.prev_count_bounding_boxes == 1:
+                    
+                    print("passed purple bar")
+                    self.purple_bar_passed += 1 
+
+                if self.purple_bar_passed > 1:
+
+                    self.execute = 'descend_purple'
+
+                self.prev_count_bounding_boxes = count_bounding_boxes
+
+            elif self.execute == 'descend_purple' and bar_label == 'vertical':
+
+                error_px = desired_px - px
+                error_py = desired_py - py - 100
+                error_forward = 0.0
+    
 
         # Compute derivative terms (rate of change of error)
         derivative_px = (error_px - self.prev_error_px) / self.dt
@@ -332,7 +382,7 @@ class VisualServoingRobot(BaseVisualServoing):
                     self.Kd_y * error_py) + 9.81 # Thrust control (Z-axis)
 
         roll_rate = - (self.Kp_x * error_px +
-                       self.Kd_x * derivative_px) - 0.07  # Roll control (X-axis)
+                       self.Kd_x * derivative_px) # Roll control (X-axis)
 
         y_ddot = - (self.Kp_y * error_py +
                     self.Kd_y * derivative_py)  # Vertical acceleration (Y-axis)
@@ -342,10 +392,10 @@ class VisualServoingRobot(BaseVisualServoing):
         self.prev_error_py = error_py
         self.prev_error_forward = error_forward
 
-        print(f"Errors: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_forward:.2f}]")
-        print(f"Control inputs: [thrust: {thrust:.2f}, roll_rate: {roll_rate:.2f}, y_ddot: {y_ddot:.2f}]")
+        # print(f"Errors: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_forward:.2f}]")
+        # print(f"Control inputs: [thrust: {thrust:.2f}, roll_rate: {roll_rate:.2f}, y_ddot: {y_ddot:.2f}]")
 
-        return np.array([thrust, roll_rate, 0])
+        return np.array([thrust, roll_rate, y_ddot])
 
 
 if __name__ == "__main__":
