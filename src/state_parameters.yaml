@@ -15,7 +15,7 @@
     "bar_label": "horizontal",
     "error_offsets": {
       "px": -150,
-      "py": 300
+      "py": 400
     },
     "counter": "purple",
     "counter_threshold": 1,

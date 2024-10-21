@@ -10,15 +10,21 @@
 ### File Structure
 
 ```bash
+├── images/
+│   ├── canvas_single_tower.png
+│   ├── mask_single_tower.png
 ├── src/
 │   ├── base_visual_servoing.py
 │   ├── controller_integrator.py
 │   ├── helpers.py
 │   ├── main.py
 │   ├── state_parameters.yaml
+│   ├── visualization.png
 │   ├── visualizer.py
 └── README.md
 ```
+
+Make sure the `/images` folder is in place before running the `main.py`.  
 
 ## Usage
 
@@ -108,6 +114,8 @@ y = f * Y / Z + canvas_size       # (f, canvas size) in pixels, (Y, Z) in meters
 ```
 
 ### Controllers for Visual Servoing
+
+To generate appropriate commands using the visual information received from the camera view.
  
 ### PD
 The equation for a PD (Proportional-Derivative) controller is:
@@ -168,3 +176,9 @@ Top Right image: camera view with detected bounding box
 Bottom Left image: masked camera view
 
 <img src="src/visualization.png" alt="isolated" width="600"/>
+
+### Limitations and potential solutions
+
+- I currently use a 3D to 2D projection to find the center of the camera view and crop a 300x300 image around it to simulate the camera's perspective. However, this approach limits the field of view (FOV) to a fixed size, which doesn't reflect changes when the drone moves toward or away from the canvas. As a result, it becomes difficult to control forward movement. A potential solution is to incorporate the camera's actual FOV and resize the image to 300x300, maintaining a sense of depth. By using the width of the bounding boxes, we could then generate input to better control the drone's forward motion. 
+
+- Another limitation is the inability to use the drone's states as input to the controller, which prevents leveraging the states and dynamics for implementing more advanced controllers like LQR or MPC. These controllers consider the robot's dynamics to generate optimal control inputs. Additionally, tuning the gains of PD and PID controllers is time-consuming and relies on trial and error, which doesn't guarantee the best performance. Incorporating more sophisticated control strategies could lead to more efficient and reliable control of the drone's movements.
