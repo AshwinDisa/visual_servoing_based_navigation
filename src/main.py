@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 import sys
 import pdb
+import time
 
 from base_visual_servoing import BaseVisualServoing
 from controller_integrator import Controller, Integrator
@@ -70,6 +71,8 @@ class VisualServoingRobot(BaseVisualServoing):
         self.canvas_size = 3072  # Size of the canvas in pixels
         self.camera_view_size = 300  # Size of the camera view in pixels
         self.focal_length = 900  # Focal length for projection
+
+        # Using u = f * x / z, f = 900 u = 3072, x = 10.24m (1m = 300px), I get z = 3.0
         self.depth = 3.0  # Depth between robot and canvas
 
     def vehicle_dynamics(self, state: np.ndarray, control: np.ndarray) -> np.ndarray:
@@ -211,7 +214,7 @@ class VisualServoingRobot(BaseVisualServoing):
                 update_trajectory_state(self, bounding_boxes, params)
 
         if self.execute == 'Trajectory completed':
-            return self.gravity, 0.0, 0.0        
+            return self.gravity, 0.0, 0.0       # Hover in place        
 
         return error_px, error_py, error_forward
 

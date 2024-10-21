@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import pdb
 
 def get_robot_position(state):
     """
@@ -87,6 +86,7 @@ def detect_contours(mask_view, lower, upper, label):
         for contour in contours
         for (px, py), (wbb, hbb), theta_bb in [cv2.minAreaRect(contour)]
     ]
+
     return bounding_boxes
 
 def draw_bounding_boxes(image, bounding_boxes):

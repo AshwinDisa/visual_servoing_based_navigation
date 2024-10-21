@@ -20,7 +20,7 @@ class BaseVisualServoing:
         self.canvas_image = cv2.imread(path + "canvas_single_tower.png")
         self.canvas_mask = cv2.imread(path + "mask_single_tower.png")
         self.state[0] = 4.0
-        self.state[1] = 1.5
+        self.state[1] = 2
         self.state[2] = 2
 
     def set_controls(self, controls: np.ndarray):
