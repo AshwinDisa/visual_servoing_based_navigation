@@ -3,8 +3,8 @@
 ### Additional dependencies
 
 ```bash
+- PyYAML    # pip install pyyaml
 - argparse
-- PyYAML
 ```
 
 ### File Structure
