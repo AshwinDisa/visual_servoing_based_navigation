@@ -27,8 +27,8 @@ class VisualServoingRobot(BaseVisualServoing):
         self.Kd_forward = 0.5
 
         # Initialize errors for derivative terms
-        self.prev_error_px = -31
-        self.prev_error_py = 78
+        self.prev_error_px = 0
+        self.prev_error_py = 0
         self.prev_error_forward = 0
 
         # Fixed time step
@@ -83,27 +83,56 @@ class VisualServoingRobot(BaseVisualServoing):
 
         return state_dot
 
+    # def step(self, time_step: float):
+    #     """
+    #     Integrates the vehicle's dynamics over a specified time step.
+
+    #     Parameters:
+    #     time_step (float): The duration over which to integrate the vehicle dynamics.
+
+    #     This function calculates the new state of the vehicle by performing a
+    #     discrete time-step integration on the current state and control inputs.
+    #     It updates the vehicle's state based on the computed dynamics at different
+    #     points within the time step.
+
+    #     Returns:
+    #     None: The vehicle's state is updated in place.
+    #     """
+
+    #     # Compute the rate of change of the state
+    #     state_dot = self.vehicle_dynamics(self.state, self.controls)
+
+    #     # Euler integration
+    #     self.state += state_dot * time_step
+
     def step(self, time_step: float):
         """
-        Integrates the vehicle's dynamics over a specified time step.
+        Integrates the vehicle's dynamics using the Runge-Kutta 4th order method (RK4).
 
         Parameters:
         time_step (float): The duration over which to integrate the vehicle dynamics.
 
         This function calculates the new state of the vehicle by performing a
-        discrete time-step integration on the current state and control inputs.
-        It updates the vehicle's state based on the computed dynamics at different
-        points within the time step.
+        discrete time-step integration using RK4 on the current state and control inputs.
 
         Returns:
         None: The vehicle's state is updated in place.
         """
 
-        # Compute the rate of change of the state
-        state_dot = self.vehicle_dynamics(self.state, self.controls)
+        # k1: Evaluate the slope at the initial point (current state)
+        k1 = self.vehicle_dynamics(self.state, self.controls)
 
-        # Euler integration
-        self.state += state_dot * time_step
+        # k2: Evaluate the slope at the midpoint (state + 0.5 * time_step * k1)
+        k2 = self.vehicle_dynamics(self.state + 0.5 * time_step * k1, self.controls)
+
+        # k3: Evaluate the slope again at the midpoint with k2
+        k3 = self.vehicle_dynamics(self.state + 0.5 * time_step * k2, self.controls)
+
+        # k4: Evaluate the slope at the end of the interval (state + time_step * k3)
+        k4 = self.vehicle_dynamics(self.state + time_step * k3, self.controls)
+
+        # Combine the four slopes to get the next state
+        self.state += (time_step / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)    
 
     # def get_camera_view(self):
     #     """
@@ -258,7 +287,7 @@ class VisualServoingRobot(BaseVisualServoing):
 
         cv2.imshow('RGB view', camera_view_with_boxes)
         cv2.imshow('Mask view', mask_view)
-        cv2.waitKey(100)  # Wait for a key press to close the window
+        cv2.waitKey(30)  # Wait for a key press to close the window
 
         # print(bounding_boxes)
 
@@ -395,7 +424,7 @@ class VisualServoingRobot(BaseVisualServoing):
         self.prev_error_forward = error_forward
 
         # print(f"Errors: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_forward:.2f}]")
-        # print(f"Control inputs: [thrust: {thrust:.2f}, roll_rate: {roll_rate:.2f}, y_ddot: {y_ddot:.2f}]")
+        print(f"Control inputs: [thrust: {thrust:.2f}, roll_rate: {roll_rate:.2f}, y_ddot: {y_ddot:.2f}]")
 
         # print(f"{roll_rate:.2f}, error: {error_px:.2f}")
 

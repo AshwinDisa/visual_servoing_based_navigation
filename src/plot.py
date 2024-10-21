@@ -4,6 +4,10 @@ from pathlib import Path
 import cv2
 import pdb
 
+FOCAL_LENGTH = 900.0
+DEPTH = 3.0
+HALF_CANVAS = 1536.0
+
 def plot_trajectory_on_canvas(file_path):
     # Load the canvas image (using your existing path to the canvas)
     path = str(Path(__file__).parent.parent) + "/images/"
@@ -24,10 +28,12 @@ def plot_trajectory_on_canvas(file_path):
     canvas_size = 3072     # Canvas size in pixels (10.24 meters side)
     center_pixel = canvas_size // 2  # The center of the canvas in pixels (1536, 1536)
 
-    trajectory_pixels = [
-        (x * pixel_per_meter + center_pixel, -z * pixel_per_meter + center_pixel)
-        for x, z in trajectory
-    ]
+    # trajectory_pixels = [
+    #     (x * pixel_per_meter + center_pixel, -z * pixel_per_meter + center_pixel)
+    #     for x, z in trajectory
+    # ]
+
+    trajectory_pixels = [(x*FOCAL_LENGTH/DEPTH, -z*FOCAL_LENGTH/DEPTH + HALF_CANVAS*2) for x, z in trajectory] 
 
     # Separate x and z for plotting
     x_pixels, z_pixels = zip(*trajectory_pixels)

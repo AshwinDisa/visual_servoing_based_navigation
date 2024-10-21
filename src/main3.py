@@ -2,13 +2,14 @@ import argparse
 import cv2
 import numpy as np
 from base_visual_servoing import BaseVisualServoing
-from controllers_integrators import Controller, Integrator  # Import from the new module
+from controller import Controller
+from integrator import Integrator
+import pdb
 
 np.set_printoptions(precision=4, suppress=True)
 
-
 class VisualServoingRobot(BaseVisualServoing):
-    def __init__(self):
+    def __init__(self, integrator, controller):
         super().__init__()
 
         self.pixel_per_meter = 300
@@ -16,19 +17,22 @@ class VisualServoingRobot(BaseVisualServoing):
         self.camera_view_size = 300
         self.focal_length = 3.2
 
+        self.integrator = integrator
+        self.controller = controller
+
         # Initialize PD gains for X, Y, and Z axes
         self.Kp_x = 0.001
         self.Kd_x = 0.005
 
-        self.Kp_y = 0.01
+        self.Kp_y = 0.02
         self.Kd_y = 0.01
 
         self.Kp_forward = 0.2
         self.Kd_forward = 0.5
 
         # Initialize errors for derivative terms
-        self.prev_error_px = -31
-        self.prev_error_py = 78
+        self.prev_error_px = 0
+        self.prev_error_py = 0
         self.prev_error_forward = 0
 
         # Fixed time step
@@ -83,29 +87,82 @@ class VisualServoingRobot(BaseVisualServoing):
 
         return state_dot
 
+    # def step(self, time_step: float):
+    #     """
+    #     Integrates the vehicle's dynamics over a specified time step.
+
+    #     Parameters:
+    #     time_step (float): The duration over which to integrate the vehicle dynamics.
+
+    #     This function calculates the new state of the vehicle by performing a
+    #     discrete time-step integration on the current state and control inputs.
+    #     It updates the vehicle's state based on the computed dynamics at different
+    #     points within the time step.
+
+    #     Returns:
+    #     None: The vehicle's state is updated in place.
+    #     """
+
+    #     # Compute the rate of change of the state
+    #     state_dot = self.vehicle_dynamics(self.state, self.controls)
+
+    #     # Euler integration
+    #     self.state += state_dot * time_step
+
     def step(self, time_step: float):
         """
-        Integrates the vehicle's dynamics over a specified time step.
+        Integrates the vehicle's dynamics using the Runge-Kutta 4th order method (RK4).
 
         Parameters:
         time_step (float): The duration over which to integrate the vehicle dynamics.
 
         This function calculates the new state of the vehicle by performing a
-        discrete time-step integration on the current state and control inputs.
-        It updates the vehicle's state based on the computed dynamics at different
-        points within the time step.
+        discrete time-step integration using RK4 on the current state and control inputs.
 
         Returns:
         None: The vehicle's state is updated in place.
         """
 
-        # Compute the rate of change of the state
-        state_dot = self.vehicle_dynamics(self.state, self.controls)
+        self.state = self.integrator.integrate(self.vehicle_dynamics, self.state, self.controls, time_step)
 
-        # Euler integration
-        self.state += state_dot * time_step
+        self.plot_trajectory_on_canvas(self.state)
 
+    def plot_trajectory_on_canvas(self, state):
+        # Initialize the trajectory list if it doesn't exist
+        if not hasattr(self, 'trajectory'):
+            self.trajectory = []
 
+        # Extract x and z from the state
+        x = state[0]
+        z = state[2]
+
+        # Append the current coordinates to the trajectory
+        self.trajectory.append((x, z))
+
+        # Create a copy of the canvas to draw on
+        canvas = self.canvas_image.copy()
+
+        # Define scaling constants
+        FOCAL_LENGTH = 900.0    # Replace with the actual focal length
+        DEPTH = 3.0           # Replace with the actual depth value
+        HALF_CANVAS = canvas.shape[0] // 2  # Assuming a square canvas
+
+        # Convert trajectory coordinates to pixel values using the provided scaling
+        trajectory_pixels = [
+            (
+                int(x * FOCAL_LENGTH / DEPTH),
+                int(-z * FOCAL_LENGTH / DEPTH + HALF_CANVAS * 2)
+            )
+            for x, z in self.trajectory
+        ]
+
+        # Draw each point on the canvas
+        for x_pixel, z_pixel in trajectory_pixels:
+            cv2.circle(canvas, (x_pixel, z_pixel), radius=2, color=(0, 0, 255), thickness=7)
+
+        # Display the updated canvas
+        cv2.imshow('Trajectory', cv2.resize(canvas, (600, 600)))
+        cv2.waitKey(30)
 
     def get_camera_view(self):
         """
@@ -123,7 +180,7 @@ class VisualServoingRobot(BaseVisualServoing):
         # Fixed distance between the drone and the canvas (drone is 2 meters away)
         # Z_drone = 2.0  # The depth of the drone from the canvas
 
-        Z_drone = 2
+        Z_drone = 3
 
         # The focal length of the camera in pixels (provided as 900 pixels)
         focal_length_px = 900
@@ -131,10 +188,15 @@ class VisualServoingRobot(BaseVisualServoing):
         # Convert the robot's (x, y) coordinates to pixel coordinates on the canvas using the projection formula
         # u = f * (X / Z), v = f * (Y / Z)
         # We are only using X (horizontal) and Z (vertical) here for simplicity.
-        x_px = int((x / Z_drone) * focal_length_px + self.canvas_size / 2)
+        # x_px = int((x / Z_drone) * focal_length_px + self.canvas_size / 2)
+
+        # # z is negative, assuming it moves the drone up in the image 
+        # z_px = int((-z / Z_drone) * focal_length_px + self.canvas_size / 2)
+
+        x_px = int((x / Z_drone) * focal_length_px)
 
         # z is negative, assuming it moves the drone up in the image 
-        z_px = int((-z / Z_drone) * focal_length_px + self.canvas_size / 2)
+        z_px = int((-z / Z_drone) * focal_length_px) + self.canvas_size
 
         # The robot is looking directly at the canvas, we crop a 300x300px area around the current position
         half_view_size = self.camera_view_size // 2
@@ -144,6 +206,8 @@ class VisualServoingRobot(BaseVisualServoing):
         top_left_y = max(0, z_px - half_view_size)
         bottom_right_x = min(self.canvas_size, top_left_x + self.camera_view_size)
         bottom_right_y = min(self.canvas_size, top_left_y + self.camera_view_size)
+
+        # pdb.set_trace()
 
         # Crop the camera view from the canvas image and mask
         camera_view = self.canvas_image[top_left_y:bottom_right_y, top_left_x:bottom_right_x].copy()
@@ -219,15 +283,14 @@ class VisualServoingRobot(BaseVisualServoing):
             # Store the bounding box information
             bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
 
-
         cv2.imshow('RGB view', camera_view_with_boxes)
         cv2.imshow('Mask view', mask_view)
-        cv2.waitKey(100)  # Wait for a key press to close the window
+        cv2.waitKey(30)  # Wait for a key press to close the window
 
         # print(bounding_boxes)
 
         return bounding_boxes
-    
+
     def get_visual_servoing_inputs(self):
         """
         Implements the visual servoing algorithm using a PD controller
@@ -247,12 +310,9 @@ class VisualServoingRobot(BaseVisualServoing):
         desired_px = self.camera_view_size / 2
         desired_py = self.camera_view_size / 2
 
-        # Extract bounding box properties
-        # px, py, wbb, hbb, theta_bb, bar_label = bounding_boxes[0]
-
         for bounding_box in bounding_boxes:
 
-            px, py, wbb, hbb, theta_bb, bar_label = bounding_box
+            px, py, _, _, _, bar_label = bounding_box
 
             if self.traj_start == False:
 
@@ -281,6 +341,7 @@ class VisualServoingRobot(BaseVisualServoing):
                         
                     self.execute = 'travel_green'
                     self.prev_count_bounding_boxes = 0
+                    self.green_bar_passed = 0
                     print("----------------------")
                     print("Onto Green bar")
                     print("----------------------")
@@ -288,7 +349,7 @@ class VisualServoingRobot(BaseVisualServoing):
             elif self.execute == 'travel_green' and bar_label == 'horizontal':
 
                 error_px = desired_px - px - 100
-                error_py = desired_py - py + 30
+                error_py = desired_py - py + 100
                 error_forward = 0.0
 
                 count_bounding_boxes = len(bounding_boxes)
@@ -305,46 +366,57 @@ class VisualServoingRobot(BaseVisualServoing):
                     print("Descending Purple bar")
                     print("----------------------")
 
+                    self.prev_count_bounding_boxes = 0    
+
                 self.prev_count_bounding_boxes = count_bounding_boxes
 
             elif self.execute == 'descend_purple' and bar_label == 'vertical':
 
                 error_px = desired_px - px + 100
-                error_py = desired_py - py - 300
+                error_py = desired_py - py - 400
                 error_forward = 0.0
-    
 
-        # Compute derivative terms (rate of change of error)
-        derivative_px = (error_px - self.prev_error_px) / self.dt
-        derivative_py = (error_py - self.prev_error_py) / self.dt
-        derivative_forward = (error_forward - self.prev_error_forward) / self.dt
+                count_bounding_boxes = len(bounding_boxes)
 
-        # PD control for each axis
-        thrust = (self.Kp_y * error_py +
-                    self.Kd_y * error_py) + 9.81 # Thrust control (Z-axis)
+                if count_bounding_boxes - self.prev_count_bounding_boxes == -1:
 
-        roll_rate = - (self.Kp_x * error_px +
-                       self.Kd_x * derivative_px) # Roll control (X-axis)
+                    print(f"Detected {self.green_bar_passed+1}th green bar")
+                    self.green_bar_passed += 1
 
-        y_ddot = - (self.Kp_y * error_py +
-                    self.Kd_y * derivative_py)  # Vertical acceleration (Y-axis)
+                if self.green_bar_passed > 2:
 
-        # Save current errors for the next iteration
-        self.prev_error_px = error_px
-        self.prev_error_py = error_py
-        self.prev_error_forward = error_forward
+                    self.execute = 'Trajectory completed'
+                    self.prev_count_bounding_boxes = 0
+                    self.green_bar_passed = 0
+                    print("----------------------")
+                    print("Trajectory completed")
+                    print("----------------------")
+
+                self.prev_count_bounding_boxes = count_bounding_boxes
+
+            elif self.execute == 'Trajectory completed':
+
+                return np.array([9.81, 0, 0])
+            
+        errors = [error_px, error_py, error_forward]
+        prev_errors = [self.prev_error_px, self.prev_error_py, self.prev_error_forward]
+
+        thrust, roll_rate, y_ddot = self.controller.compute_control(errors, prev_errors, self.dt)
+
+        self.prev_error_px, self.prev_error_py, self.prev_error_forward = error_px, error_py, error_forward
 
         # print(f"Errors: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_forward:.2f}]")
         # print(f"Control inputs: [thrust: {thrust:.2f}, roll_rate: {roll_rate:.2f}, y_ddot: {y_ddot:.2f}]")
 
         # print(f"{roll_rate:.2f}, error: {error_px:.2f}")
 
-        return np.array([thrust, roll_rate, 0])
+        return np.array([thrust, roll_rate, y_ddot])
 
 if __name__ == "__main__":
+    
     parser = argparse.ArgumentParser(description="Visual Servoing Robot Simulation")
-    parser.add_argument('--integrator', choices=['euler', 'runge-kutta'], default='euler', help='Choose the integration method')
-    parser.add_argument('--controller', choices=['PD', 'LQR'], default='PD', help='Choose the controller type')
+    parser.add_argument('--integrator', choices=['euler', 'RK'], default='euler', help='Choose the integration method')
+    parser.add_argument('--controller', choices=['PD', 'PID'], default='PD', help='Choose the controller type')
 
     args = parser.parse_args()
 

@@ -19,9 +19,9 @@ class BaseVisualServoing:
         path = str(Path(__file__).parent.parent) + "/images/"
         self.canvas_image = cv2.imread(path + "canvas_single_tower.png")
         self.canvas_mask = cv2.imread(path + "mask_single_tower.png")
-        # self.state[0] = 4.0
-        # self.state[1] = 1.5
-        # self.state[2] = 2
+        self.state[0] = 4.0
+        self.state[1] = 1.5
+        self.state[2] = 2
 
         #green
         # self.state[0] = -1
@@ -38,9 +38,9 @@ class BaseVisualServoing:
         # self.state[1] = 0.75
         # self.state[2] = -2.0
 
-        self.state[0] = -1.0
-        self.state[1] = 0.75
-        self.state[2] = -3
+        # self.state[0] = -1.0
+        # self.state[1] = 0.75
+        # self.state[2] = -3
 
     def set_controls(self, controls: np.ndarray):
         self.controls = controls
