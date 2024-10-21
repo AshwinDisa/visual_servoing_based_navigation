@@ -23,25 +23,6 @@ class BaseVisualServoing:
         self.state[1] = 1.5
         self.state[2] = 2
 
-        #green
-        # self.state[0] = -1
-        # self.state[1] = 0.0
-        # self.state[2] = -2.0
-
-        # #purple
-        # self.state[0] = -1
-        # self.state[1] = 0.0
-        # self.state[2] = -3.0
-
-        # #hrishi
-        # self.state[0] = -0.75
-        # self.state[1] = 0.75
-        # self.state[2] = -2.0
-
-        # self.state[0] = -1.0
-        # self.state[1] = 0.75
-        # self.state[2] = -3
-
     def set_controls(self, controls: np.ndarray):
         self.controls = controls
 
@@ -54,20 +35,14 @@ class BaseVisualServoing:
         iterations = int(duration / self.integrator_time_step)
 
         data = []
-        with open("src/trajectory_log.txt", "w") as f:  
-            for i in range(iterations):
-                control_input = self.get_visual_servoing_inputs()
-                self.set_controls(control_input)
-                self.__step()
-                point = self.state.tolist()
-                point.append(i * self.integrator_time_step)
-                data.append(point)
 
-                # log the coordinates
-                x = self.state[0]
-                z = self.state[2]
-                f.write(f"{x}, {z}\n")
-
+        for i in range(iterations):
+            control_input = self.get_visual_servoing_inputs()
+            self.set_controls(control_input)
+            self.__step()
+            point = self.state.tolist()
+            point.append(i * self.integrator_time_step)
+            data.append(point)
         data = np.array(data)
         fig = make_subplots(rows=3, cols=3)
         fig.add_trace(
