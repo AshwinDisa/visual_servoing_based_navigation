@@ -5,14 +5,24 @@ class Controller:
         self.control_type = control_type
 
         # PD Controller gains
-        self.Kp_x = 0.001
-        self.Kd_x = 0.005
+        self.Kp_pd_x = 0.001
+        self.Kd_pd_x = 0.005
 
-        self.Kp_y = 0.02
-        self.Kd_y = 0.01
+        self.Kp_pd_y = 0.02
+        self.Kd_pd_y = 0.01
 
-        self.Kp_forward = 0.2
-        self.Kd_forward = 0.5
+        self.Kp_pd_forward = 0.2
+        self.Kd_pd_forward = 0.5
+
+        # PID Controller gains
+        self.Kp_pid_x = 0.001
+        self.Kd_pid_x = 0.005
+
+        self.Kp_pid_y = 0.02
+        self.Kd_pid_y = 0.01
+
+        self.Kp_pid_forward = 0.2
+        self.Kd_pid_forward = 0.5
 
     def compute_control(self, errors, prev_errors, dt):
 
@@ -46,14 +56,14 @@ class Controller:
         derivative_error_forward = (errors[2] - prev_errors[2]) / dt
 
         # PD control for each axis
-        thrust = (self.Kp_y * errors[1] +
-                    self.Kd_y * errors[1]) + 9.81 # Thrust control (Z-axis)
+        thrust = (self.Kp_pd_y * errors[1] +
+                    self.Kd_pd_y * errors[1]) + 9.81 # Thrust control (Z-axis)
 
-        roll_rate = - (self.Kp_x * errors[0] +
-                       self.Kd_x * derivative_px) # Roll control (X-axis)
+        roll_rate = - (self.Kp_pd_x * errors[0] +
+                       self.Kd_pd_x * derivative_px) # Roll control (X-axis)
 
-        y_ddot = - (self.Kp_y * errors[2] +
-                    self.Kd_y * derivative_error_forward)  # Vertical acceleration (Y-axis)
+        y_ddot = - (self.Kp_pd_forward * errors[2] +
+                    self.Kd_pd_forward * derivative_error_forward)  # Vertical acceleration (Y-axis)
 
         return np.array([thrust, roll_rate, y_ddot])
 
@@ -70,4 +80,24 @@ class Controller:
         - control: A numpy array of control inputs [thrust, roll_rate, y_ddot].
         - prev_errors: Updated previous errors for next iteration.
         """
+        
+        # Compute derivative terms (rate of change of error)
+        derivative_px = (errors[0] - prev_errors[0]) / dt
+        derivative_py = (errors[1] - prev_errors[1]) / dt
+        derivative_error_forward = (errors[2] - prev_errors[2]) / dt
 
+        integral_errors[0] += errors[0] * dt
+        integral_errors[1] += errors[1] * dt
+        integral_errors[2] += errors[2] * dt
+
+        # PD control for each axis
+        thrust = (self.Kp_y * errors[1] +
+                    self.Kd_y * errors[1]) + 9.81 # Thrust control (Z-axis)
+
+        roll_rate = - (self.Kp_x * errors[0] +
+                       self.Kd_x * derivative_px) # Roll control (X-axis)
+
+        y_ddot = - (self.Kp_forward * errors[2] +
+                    self.Kd_forward * derivative_error_forward)  # Vertical acceleration (Y-axis)
+
+        return np.array([thrust, roll_rate, y_ddot])

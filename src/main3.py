@@ -4,12 +4,27 @@ import numpy as np
 from base_visual_servoing import BaseVisualServoing
 from controller import Controller
 from integrator import Integrator
+import yaml
+import sys
 import pdb
 
 np.set_printoptions(precision=4, suppress=True)
 
+def load_state_parameters(config_path):
+    """Load the state parameters from a YAML or JSON configuration file."""
+    try:
+        with open(config_path, 'r') as file:
+            if config_path.endswith('.yaml') or config_path.endswith('.yml'):
+                state_parameters = yaml.safe_load(file)
+            else:
+                raise ValueError("Configuration file must be a .yaml or .json file.")
+        return state_parameters
+    except Exception as e:
+        print(f"Error loading configuration file: {e}")
+        sys.exit(1)
+
 class VisualServoingRobot(BaseVisualServoing):
-    def __init__(self, integrator, controller):
+    def __init__(self, integrator, controller, state_parameters):
         super().__init__()
 
         self.pixel_per_meter = 300
@@ -19,6 +34,7 @@ class VisualServoingRobot(BaseVisualServoing):
 
         self.integrator = integrator
         self.controller = controller
+        self.state_parameters = state_parameters
 
         # Initialize PD gains for X, Y, and Z axes
         self.Kp_x = 0.001
@@ -305,124 +321,110 @@ class VisualServoingRobot(BaseVisualServoing):
 
         if not bounding_boxes:
             return np.array([0, 0, 0])  # Return zero inputs if no bounding box is detected
-        
-        # Desired bounding box center position (center of camera view)
+
         desired_px = self.camera_view_size / 2
         desired_py = self.camera_view_size / 2
 
-        for bounding_box in bounding_boxes:
+        # Initialize the trajectory if it hasn't started
+        if not self.traj_start:
+            self.traj_start = True
+            self.execute = 'climb_purple'
+            print("----------------------")
+            print("Climbing Purple bar")
+            print("----------------------")
 
-            px, py, _, _, _, bar_label = bounding_box
+        if self.execute == 'Trajectory completed':
+            return np.array([9.81, 0, 0])  # Hover in place when trajectory is completed
 
-            if self.traj_start == False:
+        error_px = error_py = error_forward = 0.0  # Default error values
 
-                self.traj_start = True
-                self.execute = 'climb_purple'
-                print("----------------------")
-                print("Climbing Purple bar")
-                print("----------------------")
+        if self.execute in self.state_parameters:
+            params = self.state_parameters[self.execute]
 
-            if self.execute == 'climb_purple' and bar_label == 'vertical':
+            # Find the bounding box with the matching bar_label
+            matching_bounding_box = None
+            for bounding_box in bounding_boxes:
+                px, py, _, _, _, bar_label = bounding_box
+                if bar_label == params['bar_label']:
+                    matching_bounding_box = bounding_box
+                    break
 
-                error_px = desired_px - px - 100
-                error_py = desired_py - py + 300
+            if matching_bounding_box:
+                px, py, _, _, _, bar_label = matching_bounding_box
+
+                # Compute errors with offsets
+                error_px = desired_px - px + params['error_offsets']['px']
+                error_py = desired_py - py + params['error_offsets']['py']
                 error_forward = 0.0
 
+                # Count bounding boxes and update counters
                 count_bounding_boxes = len(bounding_boxes)
+                diff_count = count_bounding_boxes - self.prev_count_bounding_boxes
 
-                if count_bounding_boxes - self.prev_count_bounding_boxes == 1:
+                if diff_count in params['count_difference_values']:
+                    counter_name = params['counter']
+                    setattr(self, counter_name, getattr(self, counter_name) + 1)
+                    print(f"Detected {getattr(self, counter_name)}th bar")
 
-                    print(f"Detected {self.green_bar_passed+1}th green bar")
-                    self.green_bar_passed += 1
-
-                self.prev_count_bounding_boxes = count_bounding_boxes
-
-                if self.green_bar_passed > 2:
-                        
-                    self.execute = 'travel_green'
+                if getattr(self, params['counter']) > params['counter_threshold']:
+                    self.execute = params['next_state']
+                    setattr(self, params['counter'], 0)
                     self.prev_count_bounding_boxes = 0
-                    self.green_bar_passed = 0
                     print("----------------------")
-                    print("Onto Green bar")
-                    print("----------------------")
-
-            elif self.execute == 'travel_green' and bar_label == 'horizontal':
-
-                error_px = desired_px - px - 100
-                error_py = desired_py - py + 100
-                error_forward = 0.0
-
-                count_bounding_boxes = len(bounding_boxes)
-
-                if count_bounding_boxes - self.prev_count_bounding_boxes == -1 or count_bounding_boxes - self.prev_count_bounding_boxes == 1:
-                    
-                    print(f"Detected {self.purple_bar_passed+1}th purple bar")
-                    self.purple_bar_passed += 1 
-
-                if self.purple_bar_passed > 1:
-
-                    self.execute = 'descend_purple'
-                    print("----------------------")
-                    print("Descending Purple bar")
-                    print("----------------------")
-
-                    self.prev_count_bounding_boxes = 0    
-
-                self.prev_count_bounding_boxes = count_bounding_boxes
-
-            elif self.execute == 'descend_purple' and bar_label == 'vertical':
-
-                error_px = desired_px - px + 100
-                error_py = desired_py - py - 400
-                error_forward = 0.0
-
-                count_bounding_boxes = len(bounding_boxes)
-
-                if count_bounding_boxes - self.prev_count_bounding_boxes == -1:
-
-                    print(f"Detected {self.green_bar_passed+1}th green bar")
-                    self.green_bar_passed += 1
-
-                if self.green_bar_passed > 2:
-
-                    self.execute = 'Trajectory completed'
-                    self.prev_count_bounding_boxes = 0
-                    self.green_bar_passed = 0
-                    print("----------------------")
-                    print("Trajectory completed")
+                    print(params['message'])
                     print("----------------------")
 
                 self.prev_count_bounding_boxes = count_bounding_boxes
 
-            elif self.execute == 'Trajectory completed':
-
-                return np.array([9.81, 0, 0])
-            
         errors = [error_px, error_py, error_forward]
         prev_errors = [self.prev_error_px, self.prev_error_py, self.prev_error_forward]
 
+        # Compute control inputs using the PD controller
         thrust, roll_rate, y_ddot = self.controller.compute_control(errors, prev_errors, self.dt)
 
+        # Update previous errors for the next iteration
         self.prev_error_px, self.prev_error_py, self.prev_error_forward = error_px, error_py, error_forward
-
-        # print(f"Errors: [X: {error_px:.2f}, Y: {error_py:.2f}, Z: {error_forward:.2f}]")
-        # print(f"Control inputs: [thrust: {thrust:.2f}, roll_rate: {roll_rate:.2f}, y_ddot: {y_ddot:.2f}]")
-
-        # print(f"{roll_rate:.2f}, error: {error_px:.2f}")
 
         return np.array([thrust, roll_rate, y_ddot])
 
+
 if __name__ == "__main__":
-    
-    parser = argparse.ArgumentParser(description="Visual Servoing Robot Simulation")
-    parser.add_argument('--integrator', choices=['euler', 'RK'], default='euler', help='Choose the integration method')
-    parser.add_argument('--controller', choices=['PD', 'PID'], default='PD', help='Choose the controller type')
+    parser = argparse.ArgumentParser(
+        description="Visual Servoing Robot Simulation",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    # Controller and Integrator arguments
+    parser.add_argument(
+        '--integrator',
+        choices=['euler', 'RK'],
+        default='euler',
+        help='Choose the integration method'
+    )
+    parser.add_argument(
+        '--controller',
+        choices=['PD', 'PID'],
+        default='PD',
+        help='Choose the controller type'
+    )
+
+    # Configuration file argument
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='src/state_parameters.yaml',
+        help='Path to the state parameters configuration file'
+    )
 
     args = parser.parse_args()
+
+    # Load state parameters
+    state_parameters = load_state_parameters(args.config)
 
     # Initialize the controller and integrator based on the arguments
     controller = Controller(control_type=args.controller)
     integrator = Integrator(integration_type=args.integrator)
 
-    robot = VisualServoingRobot(integrator, controller)
+    # Pass state_parameters to the robot
+    robot = VisualServoingRobot(integrator, controller, state_parameters)
     robot.run(duration=6.0)

@@ -1,0 +1,38 @@
+{
+  "climb_purple": {
+    "bar_label": "vertical",
+    "error_offsets": {
+      "px": -30,
+      "py": 300
+    },
+    "counter": "green_bar_passed",
+    "counter_threshold": 2,
+    "next_state": "travel_green",
+    "count_difference_values": [1],
+    "message": "Onto Green bar"
+  },
+  "travel_green": {
+    "bar_label": "horizontal",
+    "error_offsets": {
+      "px": -100,
+      "py": 100
+    },
+    "counter": "purple_bar_passed",
+    "counter_threshold": 1,
+    "next_state": "descend_purple",
+    "count_difference_values": [-1, 1],
+    "message": "Descending Purple bar"
+  },
+  "descend_purple": {
+    "bar_label": "vertical",
+    "error_offsets": {
+      "px": 100,
+      "py": -400
+    },
+    "counter": "green_bar_passed",
+    "counter_threshold": 2,
+    "next_state": "Trajectory completed",
+    "count_difference_values": [-1],
+    "message": "Trajectory completed"
+  }
+}
