@@ -55,6 +55,10 @@ def crop_view(x_px, y_px, camera_view_size, canvas_size, canvas_image, canvas_ma
     bottom_right_x = min(canvas_size, top_left_x + camera_view_size)
     bottom_right_y = min(canvas_size, top_left_y + camera_view_size)
 
+    # Check if the canvas image and mask are provided
+    if canvas_image is None or canvas_mask is None:
+        raise ValueError("Canvas image or mask is not provided")
+
     # Crop both the image and the mask based on the computed coordinates
     camera_view = canvas_image[top_left_y:bottom_right_y, top_left_x:bottom_right_x].copy()
     camera_mask = canvas_mask[top_left_y:bottom_right_y, top_left_x:bottom_right_x].copy()
