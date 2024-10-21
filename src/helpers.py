@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import pdb
 
 def get_robot_position(state):
     """
@@ -151,13 +152,15 @@ def update_trajectory_state(robot, bounding_boxes, params):
     if count_bounding_boxes - robot.prev_count_bounding_boxes in params['count_difference_values']:
         counter_name = params['counter']
         setattr(robot, counter_name, getattr(robot, counter_name) + 1)  # Increment the counter
-        print(f"Detected {getattr(robot, counter_name)}th bar")  # Print the current progress
+        print(f"Detected {getattr(robot, counter_name)} {counter_name} bar")  # Print the current progress
 
     # If the counter exceeds the threshold, transition to the next state
     if getattr(robot, params['counter']) > params['counter_threshold']:
         robot.execute = params['next_state']  # Update the robot's execution state
         setattr(robot, params['counter'], 0)  # Reset the counter
-        print(f"Transition to {robot.execute}: {params['message']}")  # Print the transition message
+        print("--------------------------")
+        print(f"{params['message']}")  # Print the transition message
+        print("--------------------------")
 
     # Update the previous bounding box count for the next iteration
     robot.prev_count_bounding_boxes = count_bounding_boxes

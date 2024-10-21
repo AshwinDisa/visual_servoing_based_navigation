@@ -5,7 +5,7 @@
       "px": -30,
       "py": 500
     },
-    "counter": "green_bar_passed",
+    "counter": "green",
     "counter_threshold": 2,
     "next_state": "travel_green",
     "count_difference_values": [1],
@@ -17,7 +17,7 @@
       "px": -150,
       "py": 300
     },
-    "counter": "purple_bar_passed",
+    "counter": "purple",
     "counter_threshold": 1,
     "next_state": "descend_purple",
     "count_difference_values": [-1, 1],
@@ -29,7 +29,7 @@
       "px": 70,
       "py": -500
     },
-    "counter": "green_bar_passed",
+    "counter": "green",
     "counter_threshold": 2,
     "next_state": "Trajectory completed",
     "count_difference_values": [-1],

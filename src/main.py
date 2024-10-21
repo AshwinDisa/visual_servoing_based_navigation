@@ -3,6 +3,7 @@ import numpy as np
 from pathlib import Path
 import yaml
 import sys
+import pdb
 
 from base_visual_servoing import BaseVisualServoing
 from controller_integrator import Controller, Integrator
@@ -53,12 +54,15 @@ class VisualServoingRobot(BaseVisualServoing):
         # Set simulation time step
         self.dt = 0.01
 
+        self.gravity = 9.81
+        self.drag = 4
+
         # Flags and counters to track trajectory execution and progress
         self.traj_start = False
         self.execute = 'climb_purple'  # Initial state in the trajectory
         self.prev_count_bounding_boxes = -1
-        self.green_bar_passed = 0
-        self.purple_bar_passed = 0
+        self.green = 0
+        self.purple = 0
 
     def _initialize_robot_parameters(self):
         """Initialize robot-specific parameters like size and view properties."""
@@ -82,13 +86,10 @@ class VisualServoingRobot(BaseVisualServoing):
         x, y, z, theta, x_dot, y_dot, z_dot = state
         thrust, roll_rate, y_ddot = control
 
-        g = 9.81  # Gravitational constant in m/s^2
-        d = 4     # Drag coefficient
-
         # Compute accelerations and angular velocity
-        x_ddot = thrust * np.sin(theta) - d * x_dot
-        y_ddot = y_ddot - d * y_dot
-        z_ddot = thrust * np.cos(theta) - g - d * z_dot
+        x_ddot = thrust * np.sin(theta) - self.drag * x_dot
+        y_ddot = y_ddot - self.drag * y_dot
+        z_ddot = thrust * np.cos(theta) - self.gravity - self.drag * z_dot
         theta_dot = roll_rate
 
         return np.array([x_dot, y_dot, z_dot, theta_dot, x_ddot, y_ddot, z_ddot])
@@ -198,7 +199,7 @@ class VisualServoingRobot(BaseVisualServoing):
             # Find the matching bounding box for the current bar (purple/green)
             matching_box = get_matching_bounding_box(bounding_boxes, params['bar_label'])
 
-            # If a matching box is found, calculate the position errors
+            # If a matching box (the one that needs to be followed) is found, calculate the position errors
             if matching_box:
                 px, py, *_ = matching_box
 
@@ -208,6 +209,9 @@ class VisualServoingRobot(BaseVisualServoing):
 
                 # Update the trajectory state based on the bounding box detection
                 update_trajectory_state(self, bounding_boxes, params)
+
+        if self.execute == 'Trajectory completed':
+            return self.gravity, 0.0, 0.0        
 
         return error_px, error_py, error_forward
 
