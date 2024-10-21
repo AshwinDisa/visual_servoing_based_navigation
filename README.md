@@ -57,3 +57,20 @@ The trajectory logic is insprired from **State Machine** designed to ensure that
 
 The YAML file defines the different states of the drone's movement and specifies parameters like error offsets, counters for tracking passed bars, and state transitions. By adjusting the values in this file, you can easily adapt the drone's behavior to different warehouse racks, minimizing the need for hard-coding.
 
+Example state -
+```
+"climb_purple": {                     # state name
+    "bar_label": "vertical",          # attribute to make sure this bounding box is used for control
+
+    "error_offsets": {                # error offsets to control movement
+      "px": -30,                      # offset of -0.1m in x (300px = 1m)
+      "py": 500                       # offset to move upwards
+    },
+    "counter": "green",               # To count green bars detected
+    "counter_threshold": 2,           # if counter excede 2, change state
+    "next_state": "travel_green",     # next state name
+    "count_difference_values": [1],   # condition to increment counter
+    "message": "Onto Green bar"       # message before state change
+  }
+```
+ 
