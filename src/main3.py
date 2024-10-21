@@ -49,11 +49,6 @@ class VisualServoingRobot(BaseVisualServoing):
         self.Kp_forward = 0.2
         self.Kd_forward = 0.5
 
-        # Initialize errors for derivative terms
-        self.prev_error_px = 0
-        self.prev_error_py = 0
-        self.prev_error_forward = 0
-
         # Fixed time step
         self.dt = 0.01
 
@@ -338,13 +333,9 @@ class VisualServoingRobot(BaseVisualServoing):
                 self.prev_count_bounding_boxes = count_bounding_boxes
 
         errors = [error_px, error_py, error_forward]
-        prev_errors = [self.prev_error_px, self.prev_error_py, self.prev_error_forward]
 
         # Compute control inputs using the PD controller
-        thrust, roll_rate, y_ddot = self.controller.compute_control(errors, prev_errors, self.dt)
-
-        # Update previous errors for the next iteration
-        self.prev_error_px, self.prev_error_py, self.prev_error_forward = error_px, error_py, error_forward
+        thrust, roll_rate, y_ddot = self.controller.compute_control(errors, self.dt)
 
         return np.array([thrust, roll_rate, y_ddot])
 

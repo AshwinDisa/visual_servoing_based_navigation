@@ -3,7 +3,7 @@
     "bar_label": "vertical",
     "error_offsets": {
       "px": -30,
-      "py": 400
+      "py": 500
     },
     "counter": "green_bar_passed",
     "counter_threshold": 2,
@@ -14,8 +14,8 @@
   "travel_green": {
     "bar_label": "horizontal",
     "error_offsets": {
-      "px": -100,
-      "py": 100
+      "px": -150,
+      "py": 300
     },
     "counter": "purple_bar_passed",
     "counter_threshold": 1,
@@ -26,8 +26,8 @@
   "descend_purple": {
     "bar_label": "vertical",
     "error_offsets": {
-      "px": 100,
-      "py": -300
+      "px": 70,
+      "py": -500
     },
     "counter": "green_bar_passed",
     "counter_threshold": 2,
