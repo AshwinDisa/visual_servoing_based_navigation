@@ -3,7 +3,7 @@
     "bar_label": "vertical",
     "error_offsets": {
       "px": -30,
-      "py": 300
+      "py": 400
     },
     "counter": "green_bar_passed",
     "counter_threshold": 2,
@@ -27,7 +27,7 @@
     "bar_label": "vertical",
     "error_offsets": {
       "px": 100,
-      "py": -400
+      "py": -300
     },
     "counter": "green_bar_passed",
     "counter_threshold": 2,

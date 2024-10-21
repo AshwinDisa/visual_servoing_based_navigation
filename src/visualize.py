@@ -64,4 +64,4 @@ class Visualizer():
 
         # Display the combined canvas
         cv2.imshow('Combined View', combined_canvas)
-        cv2.waitKey(30)
+        cv2.waitKey(10)
