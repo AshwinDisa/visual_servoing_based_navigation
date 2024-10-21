@@ -4,6 +4,7 @@ import numpy as np
 from base_visual_servoing import BaseVisualServoing
 from controller import Controller
 from integrator import Integrator
+from visualize import Visualizer
 import yaml
 import sys
 import pdb
@@ -24,17 +25,19 @@ def load_state_parameters(config_path):
         sys.exit(1)
 
 class VisualServoingRobot(BaseVisualServoing):
-    def __init__(self, integrator, controller, state_parameters):
+    def __init__(self, integrator, controller, state_parameters, visualizer):
         super().__init__()
 
         self.pixel_per_meter = 300
         self.canvas_size = 3072
         self.camera_view_size = 300
-        self.focal_length = 3.2
+        self.focal_length = 900
+        self.depth = 3.0
 
         self.integrator = integrator
         self.controller = controller
         self.state_parameters = state_parameters
+        self.visualizer = visualizer
 
         # Initialize PD gains for X, Y, and Z axes
         self.Kp_x = 0.001
@@ -141,45 +144,6 @@ class VisualServoingRobot(BaseVisualServoing):
 
         self.state = self.integrator.integrate(self.vehicle_dynamics, self.state, self.controls, time_step)
 
-        self.plot_trajectory_on_canvas(self.state)
-
-    def plot_trajectory_on_canvas(self, state):
-        # Initialize the trajectory list if it doesn't exist
-        if not hasattr(self, 'trajectory'):
-            self.trajectory = []
-
-        # Extract x and z from the state
-        x = state[0]
-        z = state[2]
-
-        # Append the current coordinates to the trajectory
-        self.trajectory.append((x, z))
-
-        # Create a copy of the canvas to draw on
-        canvas = self.canvas_image.copy()
-
-        # Define scaling constants
-        FOCAL_LENGTH = 900.0    # Replace with the actual focal length
-        DEPTH = 3.0           # Replace with the actual depth value
-        HALF_CANVAS = canvas.shape[0] // 2  # Assuming a square canvas
-
-        # Convert trajectory coordinates to pixel values using the provided scaling
-        trajectory_pixels = [
-            (
-                int(x * FOCAL_LENGTH / DEPTH),
-                int(-z * FOCAL_LENGTH / DEPTH + HALF_CANVAS * 2)
-            )
-            for x, z in self.trajectory
-        ]
-
-        # Draw each point on the canvas
-        for x_pixel, z_pixel in trajectory_pixels:
-            cv2.circle(canvas, (x_pixel, z_pixel), radius=2, color=(0, 0, 255), thickness=7)
-
-        # Display the updated canvas
-        cv2.imshow('Trajectory', cv2.resize(canvas, (600, 600)))
-        cv2.waitKey(30)
-
     def get_camera_view(self):
         """
         Generates a synthetic camera view based on the robot's current pose and the canvas image.
@@ -196,11 +160,6 @@ class VisualServoingRobot(BaseVisualServoing):
         # Fixed distance between the drone and the canvas (drone is 2 meters away)
         # Z_drone = 2.0  # The depth of the drone from the canvas
 
-        Z_drone = 3
-
-        # The focal length of the camera in pixels (provided as 900 pixels)
-        focal_length_px = 900
-
         # Convert the robot's (x, y) coordinates to pixel coordinates on the canvas using the projection formula
         # u = f * (X / Z), v = f * (Y / Z)
         # We are only using X (horizontal) and Z (vertical) here for simplicity.
@@ -209,10 +168,10 @@ class VisualServoingRobot(BaseVisualServoing):
         # # z is negative, assuming it moves the drone up in the image 
         # z_px = int((-z / Z_drone) * focal_length_px + self.canvas_size / 2)
 
-        x_px = int((x / Z_drone) * focal_length_px)
+        x_px = int((x / self.depth) * self.focal_length)
 
         # z is negative, assuming it moves the drone up in the image 
-        z_px = int((-z / Z_drone) * focal_length_px) + self.canvas_size
+        z_px = int((-z / self.depth) * self.focal_length) + self.canvas_size
 
         # The robot is looking directly at the canvas, we crop a 300x300px area around the current position
         half_view_size = self.camera_view_size // 2
@@ -299,13 +258,13 @@ class VisualServoingRobot(BaseVisualServoing):
             # Store the bounding box information
             bounding_boxes.append([px, py, wbb, hbb, theta_bb, bar_label])
 
-        cv2.imshow('RGB view', camera_view_with_boxes)
-        cv2.imshow('Mask view', mask_view)
-        cv2.waitKey(30)  # Wait for a key press to close the window
+        # cv2.imshow('RGB view', camera_view_with_boxes)
+        # cv2.imshow('Mask view', mask_view)
+        # cv2.waitKey(30)  # Wait for a key press to close the window
 
         # print(bounding_boxes)
 
-        return bounding_boxes
+        return bounding_boxes, camera_view_with_boxes , mask_view
 
     def get_visual_servoing_inputs(self):
         """
@@ -317,7 +276,9 @@ class VisualServoingRobot(BaseVisualServoing):
                     [thrust, roll_rate, desired_acceleration_y].
         """
 
-        bounding_boxes = self.get_bounding_box()
+        bounding_boxes, camera_view_with_boxes, mask_view = self.get_bounding_box()
+
+        self.visualizer.visualization(self.state, camera_view_with_boxes, mask_view)
 
         if not bounding_boxes:
             return np.array([0, 0, 0])  # Return zero inputs if no bounding box is detected
@@ -408,6 +369,13 @@ if __name__ == "__main__":
         help='Choose the controller type'
     )
 
+    parser.add_argument(
+        '--visualize',
+        choices=['True', 'False'],
+        default='True',
+        help='Visualize the robot trajectory'
+    )
+
     # Configuration file argument
     parser.add_argument(
         '--config',
@@ -424,7 +392,8 @@ if __name__ == "__main__":
     # Initialize the controller and integrator based on the arguments
     controller = Controller(control_type=args.controller)
     integrator = Integrator(integration_type=args.integrator)
+    visualizer = Visualizer(visualize=args.visualize)
 
     # Pass state_parameters to the robot
-    robot = VisualServoingRobot(integrator, controller, state_parameters)
+    robot = VisualServoingRobot(integrator, controller, state_parameters, visualizer)
     robot.run(duration=6.0)
