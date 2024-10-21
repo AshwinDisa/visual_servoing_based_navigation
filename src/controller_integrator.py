@@ -195,5 +195,4 @@ class Integrator:
 
         # Combine the slopes to update the state
         state += (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
-
         return state

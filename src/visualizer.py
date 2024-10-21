@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 from pathlib import Path
-import pdb
 
 class Visualizer():
     def __init__(self, visualize=True):
