@@ -1,4 +1,4 @@
-# Software Robotics Spring Co-op 2025 Assignment Visual Servoing
+# Visual servoing based navigation
 
 ### Additional dependencies
 
